@@ -1,0 +1,13 @@
+scapy==2.5.0
+pyshark==0.6
+dlms-cosem==0.15.0
+boto3==1.34
+azure-mgmt-compute==30.0.0
+google-cloud-compute==1.16.0
+pandas==2.2
+scikit-learn==1.4
+numpy==1.26
+fastapi==0.109
+uvicorn==0.27
+reportlab==4.1
+jinja2==3.1
