@@ -126,3 +126,21 @@ class ReportGenerator:
         print(f"📄 Full report saved as: {filename}")
         return filename
         
+# --- ADD THIS PART INSIDE THE ISSUE LOOP ---
+# Show Compliance Standards
+if issue.get("compliance"):
+    c.setFont("Helvetica-Bold", 9)
+    c.drawString(70, y, "Compliance & Standards:")
+    y -= 12
+    for comp in issue["compliance"]:
+        standards = ", ".join(comp.get("standards", []))
+        c.setFont("Helvetica", 8)
+        c.drawString(80, y, f"- {standards}")
+        y -= 12
+        c.setFont("Helvetica-Oblique", 8)
+        c.drawString(85, y, f"  {comp.get('description', '')}")
+        y -= 15
+        if y < 80:
+            c.showPage()
+            y = height - 50
+            
