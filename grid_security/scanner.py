@@ -3,7 +3,8 @@ import logging
 from scapy.all import ARP, Ether, srp
 from gurux_dlms import GXDLMSClient, GXDLMSConnection
 from core.logger import setup_logger
-from core.cve_checker import CVEChecker  # <-- NEW IMPORT
+from core.cve_checker import CVEChecker
+from core.compliance_mapper import ComplianceMapper  # <-- NEW IMPORT
 
 logger = setup_logger()
 
@@ -13,26 +14,10 @@ class GridSecurityScanner:
         self.dlms_port = dlms_port
         self.devices = []
         self.security_issues = []
-        self.cve_checker = CVEChecker()  # <-- INITIALIZE CVE CHECKER
+        self.cve_checker = CVEChecker()
+        self.compliance_mapper = ComplianceMapper()  # <-- INITIALIZE
 
-    def discover_devices(self):
-        logger.info(f"Discovering devices in {self.subnet}...")
-        arp_req = Ether(dst="ff:ff:ff:ff:ff:ff") / ARP(pdst=self.subnet)
-        answered, _ = srp(arp_req, timeout=2, verbose=0)
-
-        for _, rcv in answered:
-            ip = rcv.psrc
-            mac = rcv.hwsrc
-            self.devices.append({"ip": ip, "mac": mac, "protocols": []})
-        logger.info(f"Found {len(self.devices)} devices")
-        return self.devices
-
-    def check_dlms_port(self, ip):
-        try:
-            with socket.create_connection((ip, self.dlms_port), timeout=2):
-                return True
-        except:
-            return False
+    # ... (keep all existing methods: discover_devices, check_dlms_port, etc.)
 
     def analyze_dlms_security(self, ip):
         try:
@@ -48,33 +33,44 @@ class GridSecurityScanner:
             if self.check_dlms_port(ip):
                 self.devices.append({"ip": ip, "protocol": "DLMS/COSEM"})
                 
-                # Check DLMS related vulnerabilities
+                # Check DLMS vulnerabilities
                 dlms_cves = self.cve_checker.check_vulnerabilities("DLMS", "COSEM")
-                if dlms_cves:
-                    self.security_issues.append({
-                        "ip": ip,
-                        "issue": "Known vulnerabilities found in DLMS/COSEM",
-                        "risk": "High",
-                        "cves": dlms_cves,  # <-- ADDED CVE DETAILS
-                        "fix": "Update firmware to latest version, enable IEC 62351 security"
-                    })
+                issue_text = "Known vulnerabilities found in DLMS/COSEM firmware"
+                compliance = self.compliance_mapper.get_compliance_info(issue_text)  # <-- ADD
+
+                self.security_issues.append({
+                    "ip": ip,
+                    "issue": issue_text,
+                    "risk": "High",
+                    "cves": dlms_cves,
+                    "compliance": compliance,  # <-- SAVE COMPLIANCE DATA
+                    "fix": "Update device firmware to latest secure version, enable IEC 62351 security"
+                })
 
                 if conn.password in ["123456", "0000", "admin"]:
+                    issue_text = "Default/weak credentials in use"
+                    compliance = self.compliance_mapper.get_compliance_info(issue_text)  # <-- ADD
+
                     self.security_issues.append({
                         "ip": ip,
-                        "issue": "Default/weak credentials",
+                        "issue": issue_text,
                         "risk": "High",
                         "cves": [],
+                        "compliance": compliance,  # <-- SAVE
                         "fix": "Change default password immediately, use strong authentication"
                     })
 
                 if client.authentication == 0:
+                    issue_text = "No encryption or authentication enabled"
+                    compliance = self.compliance_mapper.get_compliance_info(issue_text)  # <-- ADD
+
                     self.security_issues.append({
                         "ip": ip,
-                        "issue": "No encryption or authentication enabled",
+                        "issue": issue_text,
                         "risk": "Critical",
                         "cves": [],
-                        "fix": "Enable High Level Security (HLS) per IEC 62351 standard"
+                        "compliance": compliance,  # <-- SAVE
+                        "fix": "Enable High Level Security (HLS) and encryption per IEC 62351 standard"
                     })
 
         except Exception as e:
@@ -86,33 +82,20 @@ class GridSecurityScanner:
             try:
                 socket.create_connection((ip, port), timeout=1)
                 cves = self.cve_checker.check_vulnerabilities(proto)
+                issue_text = f"{proto} port open and accessible on the network"
+                compliance = self.compliance_mapper.get_compliance_info(issue_text)  # <-- ADD
+
                 self.devices.append({"ip": ip, "protocol": proto})
                 self.security_issues.append({
                     "ip": ip,
-                    "issue": f"{proto} port open to network",
+                    "issue": issue_text,
                     "risk": "Medium",
-                    "cves": cves,  # <-- ADDED CVE DETAILS
-                    "fix": "Restrict access, enable TLS encryption"
+                    "cves": cves,
+                    "compliance": compliance,  # <-- SAVE
+                    "fix": "Restrict access to trusted IPs only, enable TLS encryption"
                 })
             except:
                 pass
 
-    def scan(self):
-        print("\n🔍 Running AMI/Smart Grid Security Scan...")
-        self.discover_devices()
-
-        for dev in self.devices:
-            ip = dev["ip"]
-            self.analyze_dlms_security(ip)
-            self.scan_mqtt_bacnet(ip)
-
-        result = {
-            "module": "AMI & Smart Grid",
-            "devices_found": len(self.devices),
-            "security_issues": self.security_issues,
-            "status": "completed"
-        }
-
-        print(f"✅ Scan done. Found {len(self.security_issues)} issues.")
-        return result
-        
+    # ... (keep the rest of the code unchanged)
+    
