@@ -1,23 +1,66 @@
-### AL ###
-#Template for AL projects for Dynamics 365 Business Central
-#launch.json folder
+# --- Python Specific ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# --- Virtual Environments ---
+.venv
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Security & Credentials (VERY IMPORTANT) ---
+.env
+.secrets
+credentials.json
+*.pem
+*.key
+*.pub
+access_token.txt
+secret.txt
+
+# --- Project Specific Outputs ---
+*.log
+*.pdf
+results/
+reports/
+GridCloud_Sentinel_Report_*.pdf
+
+# --- Databases & Large Data ---
+*.db
+*.sqlite3
+*.csv
+*.xlsx
+*.parquet
+
+# --- IDEs & Editors ---
 .vscode/
-#Cache folder
-.alcache/
-#Symbols folder
-.alpackages/
-#Snapshots folder
-.snapshots/
-#Testing Output folder
-.output/
-#Extension App-file
-*.app
-#Rapid Application Development File
-rad.json
-#Translation Base-file
-*.g.xlf
-#License-files
-*.bclicense
-*.flf
-#Test results file
-TestResults.xml
+.idea/
+*.swp
+*.swo
+.DS_Store (for Mac users)
+
+# --- AI/ML Models ---
+*.pkl
+*.joblib
+*.h5
+*.onnx
