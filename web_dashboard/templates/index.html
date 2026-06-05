@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GridCloud Sentinel - Advanced Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <style>
+        .risk-critical { background: #dc2626; }
+        .risk-high { background: #ea580c; }
+        .risk-medium { background: #ca8a04; }
+        .risk-low { background: #16a34a; }
+        .loading { display: none; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Header -->
+    <header class="bg-gray-900 text-white p-6 shadow-lg">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold flex items-center gap-2">
+                <i class="fa fa-shield"></i> GridCloud Sentinel
+            </h1>
+            <button id="scanBtn" onclick="runScan()" 
+                    class="bg-blue-600 hover:bg-blue-700 px-6 py-2 rounded-lg font-medium transition">
+                <i class="fa fa-play mr-2"></i> Run Full Security Scan
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto p-6">
+        <!-- Loading Indicator -->
+        <div id="loading" class="loading text-center py-12">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-blue-600 border-t-transparent"></div>
+            <p class="mt-4 text-lg text-gray-700">Running comprehensive security scan... Please wait.</p>
+        </div>
+
+        <!-- Results Section -->
+        <div id="results" class="space-y-8" style="display: none;">
+            <!-- Summary Cards -->
+            <div class="grid md:grid-cols-4 gap-6">
+                <div class="bg-white rounded-xl shadow p-6 border-l-4 border-blue-500">
+                    <h3 class="text-gray-500 text-sm">Smart Grid Issues</h3>
+                    <p class="text-3xl font-bold text-blue-700" id="gridCount">0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow p-6 border-l-4 border-purple-500">
+                    <h3 class="text-gray-500 text-sm">Cloud Findings</h3>
+                    <p class="text-3xl font-bold text-purple-700" id="cloudCount">0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow p-6 border-l-4 border-red-500">
+                    <h3 class="text-gray-500 text-sm">Hidden Threats</h3>
+                    <p class="text-3xl font-bold text-red-700" id="threatCount">0</p>
+                </div>
+                <div class="bg-white rounded-xl shadow p-6 border-l-4 border-green-500">
+                    <h3 class="text-gray-500 text-sm">Last Scan</h3>
+                    <p class="text-sm text-gray-700" id="scanTime">Never</p>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="grid md:grid-cols-2 gap-6">
+                <div class="bg-white rounded-xl shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">Risk Distribution</h3>
+                    <div id="riskChart" class="h-64"></div>
+                </div>
+                <div class="bg-white rounded-xl shadow p-6">
+                    <h3 class="text-lg font-semibold mb-4">Issue Categories</h3>
+                    <div id="categoryChart" class="h-64"></div>
+                </div>
+            </div>
+
+            <!-- Detailed Findings -->
+            <div class="bg-white rounded-xl shadow p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-lg font-semibold">Detailed Security Findings</h3>
+                    <button onclick="downloadReport()" 
+                            class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm">
+                        <i class="fa fa-download mr-2"></i> Download Full Report
+                    </button>
+                </div>
+
+                <!-- Grid Findings -->
+                <div class="mb-6">
+                    <h4 class="font-medium text-blue-700 mb-3">🔌 Smart Grid & AMI Security</h4>
+                    <div id="gridFindings" class="space-y-4"></div>
+                </div>
+
+                <!-- Cloud Findings -->
+                <div class="mb-6">
+                    <h4 class="font-medium text-purple-700 mb-3">☁️ Cloud & Infrastructure</h4>
+                    <div id="cloudFindings" class="space-y-4"></div>
+                </div>
+
+                <!-- AI Threats -->
+                <div>
+                    <h4 class="font-medium text-red-700 mb-3">🧠 AI Detected Threats</h4>
+                    <div id="aiFindings" class="space-y-4"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        async function runScan() {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+
+            try {
+                const response = await fetch('/run-scan', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    await loadResults();
+                } else {
+                    alert('Scan failed: ' + data.message);
+                }
+            } catch (error) {
+                alert('Error connecting to server');
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        async function loadResults() {
+            const res = await fetch('/get-results');
+            const data = await res.json();
+            
+            document.getElementById('gridCount').textContent = data.grid?.security_issues?.length || 0;
+            document.getElementById('cloudCount').textContent = data.cloud?.total_findings || 0;
+            document.getElementById('threatCount').textContent = data.ai?.unknown_threats_found || 0;
+            document.getElementById('scanTime').textContent = data.last_scan || 'Never';
+
+            renderCharts(data);
+            renderFindings(data);
+            
+            document.getElementById('results').style.display = 'block';
+        }
+
+        function renderCharts(data) {
+            const allIssues = [
+                ...(data.grid?.security_issues || []),
+                ...(data.cloud?.issues || [])
+            ];
+
+            const riskCounts = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+            allIssues.forEach(issue => {
+                const risk = issue.risk || 'Medium';
+                riskCounts[risk] = (riskCounts[risk] || 0) + 1;
+            });
+
+            Plotly.newPlot('riskChart', [{
+                values: Object.values(riskCounts),
+                labels: Object.keys(riskCounts),
+                type: 'pie',
+                marker: { colors: ['#dc2626', '#ea580c', '#ca8a04', '#16a34a'] }
+            }], { margin: { t: 20, b: 20 } });
+
+            const categories = {};
+            allIssues.forEach(issue => {
+                const cat = issue.issue.split(' ')[0] || 'Other';
+                categories[cat] = (categories[cat] || 0) + 1;
+            });
+
+            Plotly.newPlot('categoryChart', [{
+                x: Object.keys(categories),
+                y: Object.values(categories),
+                type: 'bar',
+                marker: { color: '#3b82f6' }
+            }], { margin: { t: 20, b: 40 } });
+        }
+
+        function renderFindings(data) {
+            const gridEl = document.getElementById('gridFindings');
+            const cloudEl = document.getElementById('cloudFindings');
+            const aiEl = document.getElementById('aiFindings');
+
+            gridEl.innerHTML = (data.grid?.security_issues || []).map(issue => `
+                <div class="border-l-4 ${getRiskClass(issue.risk)} p-4 bg-gray-50 rounded">
+                    <div class="flex justify-between">
+                        <span class="font-medium">${issue.issue}</span>
+                        <span class="text-xs font-bold ${getRiskText(issue.risk)}">${issue.risk}</span>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-1">IP: ${issue.ip} | Fix: ${issue.fix}</p>
+                    ${issue.cves?.length ? `<p class="text-xs text-blue-600 mt-1">CVEs: ${issue.cves.map(c => c.cve_id).join(', ')}</p>` : ''}
+                </div>
+            `).join('');
+
+            cloudEl.innerHTML = (data.cloud?.issues || []).map(issue => `
+                <div class="border-l-4 ${getRiskClass(issue.risk)} p-4 bg-gray-50 rounded">
+                    <div class="flex justify-between">
+                        <span class="font-medium">${issue.issue}</span>
+                        <span class="text-xs font-bold ${getRiskText(issue.risk)}">${issue.risk}</span>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-1">Resource: ${issue.resource} | Fix: ${issue.fix}</p>
+                </div>
+            `).join('');
+
+            aiEl.innerHTML = (data.ai?.details || []).map(threat => `
+                <div class="border-l-4 border-red-500 p-4 bg-red-50 rounded">
+                    <p class="font-medium text-red-800">Unusual Behavior Detected</p>
+                    <p class="text-sm text-gray-700 mt-1">Confidence: ${threat.confidence}% | Source: ${threat.source}</p>
+                    <p class="text-xs text-gray-600 mt-1">Recommendation: ${threat.recommendation}</p>
+                </div>
+            `).join('') || '<p class="text-gray-500 italic">No unusual activity detected</p>';
+        }
+
+        function getRiskClass(risk) {
+            return { Critical: 'border-red-500', High: 'border-orange-500', Medium: 'border-yellow-500', Low: 'border-green-500' }[risk] || 'border-gray-300';
+        }
+
+        function getRiskText(risk) {
+            return { Critical: 'text-red-700', High: 'text-orange-700', Medium: 'text-yellow-700', Low: 'text-green-700' }[risk] || 'text-gray-700';
+        }
+
+        function downloadReport() {
+            window.open('/download-report', '_blank');
+        }
+    </script>
+</body>
+                      </html>
+  
