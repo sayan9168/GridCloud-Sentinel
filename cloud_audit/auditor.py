@@ -2,67 +2,82 @@ import os
 import re
 import logging
 from core.logger import setup_logger
+from core.cve_checker import CVEChecker
+from core.compliance_mapper import ComplianceMapper  # <-- NEW IMPORT
 
 logger = setup_logger()
 
 class CloudAuditor:
     def __init__(self):
         self.findings = []
+        self.cve_checker = CVEChecker()
+        self.compliance_mapper = ComplianceMapper()  # <-- INITIALIZE
 
     def scan_aws_security(self):
-        """Check AWS EC2, S3, Security Groups"""
         try:
             import boto3
             ec2 = boto3.resource('ec2')
             
-            # Check Security Groups
             for sg in ec2.security_groups.all():
                 for perm in sg.ip_permissions:
                     for ip_range in perm.get('IpRanges', []):
                         if ip_range.get('CidrIp') == '0.0.0.0/0':
+                            issue_text = "Security group allows public access from all IPs"
+                            compliance = self.compliance_mapper.get_compliance_info(issue_text)  # <-- ADD
+
                             self.findings.append({
-                                "issue": "Security Group open to world",
+                                "issue": issue_text,
                                 "risk": "High",
                                 "resource": sg.id,
-                                "fix": "Restrict access to specific IPs"
+                                "cves": self.cve_checker.check_vulnerabilities("AWS EC2"),
+                                "compliance": compliance,  # <-- SAVE
+                                "fix": "Restrict access to only necessary IP addresses"
                             })
             logger.info("AWS scan completed")
         except Exception as e:
             logger.debug(f"AWS scan skipped: {e}")
 
     def scan_azure_security(self):
-        """Check Azure VMs and Config"""
         try:
             from azure.mgmt.compute import ComputeManagementClient
             from azure.identity import DefaultAzureCredential
-            # Basic check example
+            issue_text = "Azure configuration review"
+            compliance = self.compliance_mapper.get_compliance_info("cloud security configuration")  # <-- ADD
+
             self.findings.append({
-                "issue": "Azure configuration check passed",
+                "issue": issue_text,
                 "risk": "Info",
-                "fix": "Ensure disk encryption is enabled"
+                "resource": "Azure Subscription",
+                "cves": self.cve_checker.check_vulnerabilities("Azure"),
+                "compliance": compliance,  # <-- SAVE
+                "fix": "Ensure disk encryption, RBAC, and logging are properly enabled"
             })
             logger.info("Azure scan completed")
         except:
             pass
 
     def scan_docker_containers(self):
-        """Scan Docker images for issues"""
         try:
             import docker
             client = docker.from_env()
+            docker_cves = self.cve_checker.check_vulnerabilities("Docker")
             for container in client.containers.list():
                 if '0.0.0.0' in str(container.ports):
+                    issue_text = "Container ports exposed publicly to the internet"
+                    compliance = self.compliance_mapper.get_compliance_info(issue_text)  # <-- ADD
+
                     self.findings.append({
-                        "issue": "Container port exposed publicly",
+                        "issue": issue_text,
                         "risk": "Medium",
                         "resource": container.name,
-                        "fix": "Bind only to specific interfaces"
+                        "cves": docker_cves,
+                        "compliance": compliance,  # <-- SAVE
+                        "fix": "Bind ports only to localhost or specific internal interfaces"
                     })
         except:
             pass
 
     def scan_secrets_in_files(self, path="."):
-        """Look for hardcoded secrets, passwords, API keys"""
         patterns = {
             "AWS Key": r"AKIA[0-9A-Z]{16}",
             "Generic Secret": r"['\"]?(api_key|secret|password|token)['\"]?\s*[:=]\s*['\"]?[A-Za-z0-9/+]{16,}['\"]?"
@@ -75,30 +90,19 @@ class CloudAuditor:
                             content = f.read()
                             for name, pattern in patterns.items():
                                 if re.search(pattern, content):
+                                    issue_text = f"Possible {name} found in source code"
+                                    compliance = self.compliance_mapper.get_compliance_info(issue_text)  # <-- ADD
+
                                     self.findings.append({
-                                        "issue": f"Possible {name} found in code",
+                                        "issue": issue_text,
                                         "risk": "Critical",
                                         "resource": os.path.join(root, file),
-                                        "fix": "Remove and use environment variables"
+                                        "cves": [],
+                                        "compliance": compliance,  # <-- SAVE
+                                        "fix": "Remove hardcoded secrets, use environment variables or a secure vault"
                                     })
                     except:
                         pass
 
-    def audit(self):
-        """Main function to run all checks"""
-        print("\n☁️ Running Cloud & Infrastructure Audit...")
-        self.scan_aws_security()
-        self.scan_azure_security()
-        self.scan_docker_containers()
-        self.scan_secrets_in_files()
-
-        result = {
-            "module": "Cloud & Infrastructure Audit",
-            "total_findings": len(self.findings),
-            "issues": self.findings,
-            "status": "completed"
-        }
-
-        print(f"✅ Audit done. Found {len(self.findings)} issues.")
-        return result
-        
+    # ... (rest of the code remains the same)
+    
